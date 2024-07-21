@@ -1,6 +1,8 @@
 package com.cydeo.review;
 
+import com.cydeo.dto.ProjectDTO;
 import com.cydeo.dto.RoleDTO;
+import com.cydeo.dto.TaskDTO;
 import com.cydeo.dto.UserDTO;
 import com.cydeo.entity.Role;
 import com.cydeo.entity.User;
@@ -14,6 +16,8 @@ import com.cydeo.service.UserService;
 import com.cydeo.service.impl.UserServiceImpl;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -257,5 +261,69 @@ public class UserServiceImplTest {
         assertTrue(employeeUser.getIsDeleted());
         assertNotEquals("user3", employeeUser.getUserName());
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Manager", "Employee"})
+    void should_delete_user(String role) throws TicketingProjectException {
+
+        // Given - Preparation
+        User testUser = getUserWithRole(role);
+
+        when(userRepository.findByUserNameAndIsDeleted(anyString(), anyBoolean())).thenReturn(testUser);
+        when(userRepository.save(any())).thenReturn(testUser);
+
+//        if (testUser.getRole().getDescription().equals("Manager")) {
+//            when(projectService.listAllNonCompletedByAssignedManager(any())).thenReturn(new ArrayList<>());
+//        } else if (testUser.getRole().getDescription().equals("Employee")) {
+//            when(taskService.listAllNonCompletedByAssignedEmployee(any())).thenReturn(new ArrayList<>());
+//        }
+
+        lenient().when(projectService.listAllNonCompletedByAssignedManager(any())).thenReturn(new ArrayList<>());
+        lenient().when(taskService.listAllNonCompletedByAssignedEmployee(any())).thenReturn(new ArrayList<>());
+
+        // when - action
+        userService.delete(testUser.getUserName());
+
+        // then - Assertion/Verification
+        assertTrue(testUser.getIsDeleted());
+        assertNotEquals("user3", testUser.getUserName());
+    }
+
+    @Test
+    void should_throw_exception_when_deleting_manager_with_project(){
+
+        User managerUser = getUserWithRole("Manager");
+
+        when(userRepository.findByUserNameAndIsDeleted(anyString(), anyBoolean())).thenReturn(managerUser);
+        when(projectService.listAllNonCompletedByAssignedManager(any())).thenReturn(List.of(new ProjectDTO(), new ProjectDTO()));
+
+        Throwable actualException = assertThrows(TicketingProjectException.class, () -> userService.delete(managerUser.getUserName()));
+
+        assertEquals("User can not be deleted", actualException.getMessage());
+    }
+
+    @Test
+    void should_throw_exception_when_deleting_employee_with_task() {
+
+        User employeeUser = getUserWithRole("Employee");
+
+        when(userRepository.findByUserNameAndIsDeleted(anyString(), anyBoolean())).thenReturn(employeeUser);
+        when(taskService.listAllNonCompletedByAssignedEmployee(any())).thenReturn(List.of(new TaskDTO(), new TaskDTO()));
+
+        Throwable actualException = assertThrows(TicketingProjectException.class, () -> userService.delete(employeeUser.getUserName()));
+
+        assertEquals("User can not be deleted", actualException.getMessage());
+
+    }
+
+    //	User Story 4: As an admin, I shouldn't be able to delete an admin user,
+    //	if that admin is the last admin in the system.
+    //
+    //	Acceptance Criteria:
+    //
+    //	1 - The system should prevent an admin user from being deleted
+    //	if it is the last admin.
+    //	2 - An error message should be displayed to the user if there is an
+    //	attempt to delete the last admin user.
 
 }
